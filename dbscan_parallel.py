@@ -5,9 +5,9 @@ from pyspark import SparkContext
 from pyspark import SparkConf
 sc = SparkContext.getOrCreate(SparkConf().setMaster("local[*]"))
 
-# from src.serial import NaiveDBSCAN, MatrixDBSCAN
-# from src.utils import DataLoader, Evaluation, timeit
-# from src.settings import UNKNOWN, NOISE
+from dbscan import NaiveDBSCAN, MatrixDBSCAN
+from utils import DataLoader, Evaluation, timeit
+from settings import UNKNOWN, NOISE
 
 import numpy as np
 
@@ -15,15 +15,6 @@ import numpy as np
 b_dataset = None
 b_eps = None
 b_min_pts = None
-
-
-def load_data_label(path):
-    pts = sc.textFile(path).map(lambda x: x.strip().split()[:-1]).map(lambda x: tuple([float(i) for i in x]))
-    return pts.collect()
-
-def load_data(path):
-    pts = sc.textFile(path).map(lambda x: x.strip().split()).map(lambda x: tuple([float(i) for i in x]))
-    return pts.collect()
 
 def _bounds_coordinates(bin_bounds):
 
@@ -45,7 +36,7 @@ def _bounds_coordinates(bin_bounds):
         
     return np.array(lower_cdnts), np.array(upper_cdnts)
 
-# @timeit
+@timeit
 def spatial_partition(dataset, par_each_dim, eps):
     """
     Partitions the given dataset into spatial bins based on the specified parameters.
@@ -90,41 +81,42 @@ def spatial_partition(dataset, par_each_dim, eps):
     res = sc.parallelize(indexed_data).groupByKey().map(lambda x: [x[0], list(x[1])])
     return res
 
-# def local_dbscan(partioned_rdd, method='matrix', metric='euclidian'):
+@staticmethod
+def local_dbscan(partioned_rdd, method='matrix', metric='euclidian'):
 
-#     dataset = np.array([b_dataset.value[idp] for idp in partioned_rdd])
-#     if method == 'matrix':
-#         dbscan_obj = MatrixDBSCAN(dataset, b_eps.value, b_min_pts.value, metric) 
-#     else:
-#         dbscan_obj = NaiveDBSCAN(dataset, b_eps.value, b_min_pts.value, metric) 
-#     dbscan_obj.predict()
-#     is_core_list = dbscan_obj._find_core_pts()
+    dataset = np.array([b_dataset.value[idp] for idp in partioned_rdd])
+    if method == 'matrix':
+        dbscan_obj = MatrixDBSCAN(dataset, b_eps.value, b_min_pts.value, metric) 
+    else:
+        dbscan_obj = NaiveDBSCAN(dataset, b_eps.value, b_min_pts.value, metric) 
+    dbscan_obj.predict()
+    is_core_list = dbscan_obj._find_core_pts()
     
-#     return list(zip(zip(partioned_rdd, is_core_list), dbscan_obj.tags))
+    return list(zip(zip(partioned_rdd, is_core_list), dbscan_obj.tags))
 
-# @timeit
-# def merge(local_tags, dataset):
-#     global_tags = [UNKNOWN] * len(dataset)
-#     is_tagged = [0] * len(dataset)
-#     last_max_label = 0
-#     for local in local_tags:
-#         np_local = np.array(local[-1])
-#         np_local[:, -1] += last_max_label
+@timeit
+def merge(local_tags, dataset):
+    global_tags = [UNKNOWN] * len(dataset)
+    is_tagged = [0] * len(dataset)
+    last_max_label = 0
+    for local in local_tags:
+        np_local = np.array(local[-1])
+        np_local[:, -1] += last_max_label
 
-#         last_max_label = np.max(np_local[:, -1])
+        last_max_label = np.max(np_local[:, -1])
         
-#         # check and merge overlapped points
-#         tagged_indices = np.nonzero(is_tagged)[0]
-#         for tmp_i in range(len(np_local)):
-#             # should do tag check
-#             (p_id, is_core), label = np_local[tmp_i]
-#             if p_id in tagged_indices and is_core==1:
-#                 np_local[-1][np_local[-1]==label] = global_tags[p_id]
+        # check and merge overlapped points
+        tagged_indices = np.nonzero(is_tagged)[0]
+        for tmp_i in range(len(np_local)):
+            # should do tag check
+            (p_id, is_core), label = np_local[tmp_i]
+            if p_id in tagged_indices and is_core==1:
+                np_local[-1][np_local[-1]==label] = global_tags[p_id]
         
-#         # update global tags
-#         for (p_id, is_core), label in np_local:
-#             if is_tagged[p_id]==1:
-#                 continue
-#             global_tags[p_id] = label
-#             is_tagged[p_id] = 1
-#     return global_tags
+        # update global tags
+        for (p_id, is_core), label in np_local:
+            if is_tagged[p_id]==1:
+                continue
+            global_tags[p_id] = label
+            is_tagged[p_id] = 1
+    return global_tags
