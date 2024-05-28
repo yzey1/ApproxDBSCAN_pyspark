@@ -38,3 +38,5 @@ def grid_index_mapping(n_grid_each_dim):
         gid_to_pos[n] = grid_index[n]
     return pos_to_gid, gid_to_pos
 
+def get_point_index(data, value):
+    return data.index(value)
