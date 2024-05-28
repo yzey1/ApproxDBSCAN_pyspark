@@ -1,10 +1,11 @@
 import numpy as np
+from itertools import product
 
 # functions for partitioning data
 
 def get_minmax_by_data(dataset):
     """
-    Calculate the minimum and maximum bounds for each dimension in the dataset.
+    Get the minimum and maximum bounds for each dimension in the dataset.
 
     Parameters:
     dataset (numpy.ndarray): The input dataset.
@@ -67,7 +68,7 @@ def find_location_id(x, bin_bounds, partition_each_dim):
 
     """
     pos_list = []
-    for i in range(n_features):
+    for i in range(len(x)):
         # pos: the index of the bin in that dimension
         pos = np.digitize(x[i], bin_bounds[i]) - 1
         pos = min(partition_each_dim[i]-1, pos) # if the value is the max value, it should be in the last bin
@@ -76,24 +77,39 @@ def find_location_id(x, bin_bounds, partition_each_dim):
     return tuple(pos_list)
 
 
-# functions for constructing grids
-
-# calculate grid number for each dimension in one partition
-def cal_grid_num(min_max_bounds, eps):
+def find_buffer_location_id(x, bin_bounds, partition_each_dim, buffer_size):
     """
-    Calculate the number of grids in each dimension based on the minimum and maximum bounds and the epsilon value.
+    Find the buffer location IDs for a given point in each dimension.
 
     Args:
-        min_max_bounds (list): A list of tuples representing the minimum and maximum bounds for each feature.
-        eps (float): The epsilon value used for calculating the grid side length.
+        x (list): The coordinates of the point.
+        bin_bounds (list): The boundaries of each bin in each dimension.
+        partition_each_dim (list): The number of partitions in each dimension.
+        buffer_size (int): The size of the buffer.
 
     Returns:
-        list: A list containing the number of grids in each dimension.
+        list: A list of all possible combinations of buffer location IDs for the given point.
 
     """
-    global n_features
-    grid_side_len = eps/np.sqrt(n_features)
-    gridnum_each_dim = []
-    for i in range(n_features):
-        gridnum_each_dim.append(int((min_max_bounds[i][1] - min_max_bounds[i][0]) / grid_side_len))
-    return gridnum_each_dim
+    pos_list = []
+    for i in range(len(x)):
+        # pos: the index of the bin in that dimension
+        pos = np.digitize(x[i], bin_bounds[i]) - 1
+        pos = min(partition_each_dim[i]-1, pos) # if the value is the max value, it should be in the last bin
+        pos = max(0, pos) # if the value is the min value, it should be in the first bin
+        
+        lower_bound = bin_bounds[i][pos]
+        upper_bound = bin_bounds[i][pos+1]
+        pos_buffer = [pos]
+        
+        if x[i] - lower_bound < buffer_size:
+            for j in range(1, buffer_size+1):
+                pos_buffer.append(max(0, pos-j))
+        if upper_bound - x[i] < buffer_size:
+            for j in range(1, buffer_size+1):
+                pos_buffer.append(min(partition_each_dim[i]-1, pos+j))
+        pos_list.append(pos_buffer)
+        
+    all_combinations = list(product(*pos_list))
+    return all_combinations
+
