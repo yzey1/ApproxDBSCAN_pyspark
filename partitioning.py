@@ -117,7 +117,8 @@ def add_partition_id(x, grid_bins, n_pa_each_dim, buffer_size):
     buffer_loc_id = list(set(buffer_loc_id))
     return [(blid, (x[0], x[1])) for blid in buffer_loc_id]
 
-def get_partitioned_cells(rdd, grid_bins, n_pa_each_dim, buffer_size):
+def get_partitioned_cells(rdd, grid_bins, n_pa_each_dim, n_features):
+    buffer_size = int(np.ceil(np.sqrt(n_features))) # buffer size (number of cells to be included in half of the buffer region)
     rdd1 = rdd.flatMap(lambda x: add_partition_id(x, grid_bins, n_pa_each_dim, buffer_size))
     partitioned_rdd = rdd1.groupByKey().mapValues(list)
     # partitioned_rdd = rdd1.sortByKey()
@@ -147,10 +148,7 @@ def parallelize_data(X, eps, n_pa_each_dim, sc):
     grid_min_max = np.array(([0 for _ in range(len(n_grid_each_dim))], [i-1 for i in n_grid_each_dim])).T
     grid_bins = get_bin_bounds(grid_min_max, n_pa_each_dim)
 
-    # buffer size (number of cells to be included in half of the buffer region)
-    buffer_size = int(np.ceil(eps/cal_grid_side_len(eps, n_features)))
-    
     # partition the cells
-    partitioned_rdd = get_partitioned_cells(grid_rdd, grid_bins, n_pa_each_dim, buffer_size)
+    partitioned_rdd = get_partitioned_cells(grid_rdd, grid_bins, n_pa_each_dim, n_features)
     
     return partitioned_rdd, n_grid_each_dim
