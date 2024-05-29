@@ -118,7 +118,8 @@ def add_partition_id(x, grid_bins, n_pa_each_dim, buffer_size):
     return [(blid, (x[0], x[1])) for blid in buffer_loc_id]
 
 def get_partitioned_cells(rdd, grid_bins, n_pa_each_dim, n_features):
-    buffer_size = int(np.ceil(np.sqrt(n_features))) # buffer size (number of cells to be included in half of the buffer region)
+    # buffer size (number of cells to be included in half of the buffer region)
+    buffer_size = int(np.ceil(np.sqrt(n_features)))
     rdd1 = rdd.flatMap(lambda x: add_partition_id(x, grid_bins, n_pa_each_dim, buffer_size))
     partitioned_rdd = rdd1.groupByKey().mapValues(list)
     # partitioned_rdd = rdd1.sortByKey()
@@ -126,6 +127,20 @@ def get_partitioned_cells(rdd, grid_bins, n_pa_each_dim, n_features):
 
 
 def parallelize_data(X, eps, n_pa_each_dim, sc):
+    """
+    Parallelizes the data and performs partitioning for ApproxDBSCAN algorithm.
+
+    Args:
+        X (numpy.ndarray): The input data array.
+        eps (float): The maximum distance between two samples for them to be considered as neighbors.
+        n_pa_each_dim (list): The number of partitions in each dimension.
+        sc (pyspark.SparkContext): The Spark context.
+
+    Returns:
+        partitioned_rdd (pyspark.rdd.RDD): The partitioned RDD containing the data points grouped by partitions.
+        n_grid_each_dim (list): The number of grids in each dimension.
+
+    """
     # convert the data to list
     X = X.tolist()
     n_features = len(X[0])

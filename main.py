@@ -17,6 +17,7 @@ if __name__ == "__main__":
     # set parameters
     eps = 0.5
     min_pts = 5
+    rho = 0.001
     n_pa_each_dim = [2 for _ in range()]
     
     # read data
@@ -27,7 +28,7 @@ if __name__ == "__main__":
     partitioned_data, n_grid_each_dim = parallelize_data(data, eps, min_pts, n_pa_each_dim, sc)
     
     # run approxDBSCAN
-    ad_cluster = ApproxDBSCAN(partitioned_data, eps, min_pts, n_grid_each_dim, n_pa_each_dim)
+    ad_cluster = ApproxDBSCAN(partitioned_data, eps, min_pts, rho, n_grid_each_dim, n_pa_each_dim)
     print(ad_cluster)
     
     # get clustering result

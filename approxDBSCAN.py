@@ -69,7 +69,24 @@ def find_neighbor_cell(pa, eps, rho):
                             yield (pid, gid, gid2)
 
 def compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim, sc):
-    
+    """
+    Compute the connected components of a graph using Apache Spark's GraphFrame.
+
+    Args:
+        core_cells (RDD): RDD containing the core cells.
+        neighbor_pairs (RDD): RDD containing the neighbor pairs.
+        pos_to_gid (dict): Dictionary mapping position to global ID.
+        pos_to_paid (dict): Dictionary mapping position to partition ID.
+        n_pa_each_dim (list): List containing the number of partitions in each dimension.
+        sc (SparkContext): SparkContext object.
+
+    Returns:
+        RDD: RDD containing the connected components.
+
+    Raises:
+        None
+    """
+
     # create vertices and edges
     v = core_cells.map(lambda x: (pos_to_paid[x[0][0]], pos_to_gid[x[0][1]],)).toDF(["paid", "id"])
     v = v.repartition(int(np.prod(n_pa_each_dim)), "paid")
@@ -93,8 +110,27 @@ def compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_
     return connectedComponent.rdd
 
 def merge_partitioned_data(points_with_flag, pos_to_gid):
+    """
+    Merge partitioned data by removing duplicates and updating flags.
+
+    Args:
+        points_with_flag (RDD): RDD containing points with flags.
+        pos_to_gid (dict): Dictionary mapping position to group ID.
+
+    Returns:
+        RDD: RDD containing merged points with updated flags.
+    """
     
     def _remove_duplicates(x):
+        """
+        Remove duplicates within a group and update flags.
+
+        Args:
+            x (tuple): Tuple containing group ID and list of points.
+
+        Yields:
+            tuple: Tuple containing group ID and point with updated flag.
+        """
         gid = x[0]
         points = x[1]
         points_flag = {}
@@ -102,7 +138,7 @@ def merge_partitioned_data(points_with_flag, pos_to_gid):
             if p[0] not in points_flag:
                 points_flag[p[0]] = p[1]
             else:
-                if (p[1] == 1)&(points_flag[p[0]] == 0):
+                if (p[1] == 1) & (points_flag[p[0]] == 0):
                     points_flag[p[0]] = 1
         for k, v in points_flag.items():
             yield (gid, (k, v))
@@ -114,6 +150,21 @@ def merge_partitioned_data(points_with_flag, pos_to_gid):
     return points_flagged
 
 def ApproxDBSCAN(partitioned_rdd, eps, min_pts, rho, n_grid_each_dim, n_pa_each_dim, sc):
+    """
+    Perform Approximate DBSCAN clustering algorithm on a partitioned RDD.
+
+    Parameters:
+    - partitioned_rdd (RDD): The partitioned RDD containing the data points.
+    - eps (float): The maximum distance between two points to be considered neighbors.
+    - min_pts (int): The minimum number of points required to form a dense region.
+    - rho (float): The density threshold for identifying core cells.
+    - n_grid_each_dim (int): The number of grid cells in each dimension for grid indexing.
+    - n_pa_each_dim (int): The number of partition cells in each dimension for partitioning.
+    - sc (SparkContext): The SparkContext object.
+
+    Returns:
+    - cluster_df (pandas DataFrame): The resulting clusters as a pandas DataFrame.
+    """
 
     # Step 1: Compute the core points
     points_with_flag = partitioned_rdd.mapPartitions(lambda x: find_core_points(x, eps, min_pts))
