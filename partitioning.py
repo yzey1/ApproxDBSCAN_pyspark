@@ -1,7 +1,10 @@
-import numpy as np
-from itertools import product
+from pyspark import SparkContext
+from pyspark import SparkConf
+sc = SparkContext.getOrCreate(SparkConf().setMaster("local[*]"))
 
-# functions for partitioning data
+from utils import *
+from itertools import product
+import numpy as np
 
 def get_minmax_by_data(dataset):
     """
@@ -113,3 +116,44 @@ def find_buffer_location_id(x, bin_bounds, partition_each_dim, buffer_size):
     all_combinations = list(product(*pos_list))
     return all_combinations
 
+def add_partition_id(x, grid_bins, n_pa_each_dim, buffer_size):
+    buffer_loc_id = find_buffer_location_id(x[0], grid_bins, n_pa_each_dim, buffer_size)
+    buffer_loc_id = list(set(buffer_loc_id))
+    return [(blid, (x[0], x[1])) for blid in buffer_loc_id]
+
+def get_partitioned_cells(rdd, grid_bins, n_pa_each_dim, buffer_size):
+    rdd1 = rdd.flatMap(lambda x: add_partition_id(x, grid_bins, n_pa_each_dim, buffer_size))
+    partitioned_rdd = rdd1.groupByKey().mapValues(list)
+    # partitioned_rdd = rdd1.sortByKey()
+    return partitioned_rdd
+
+
+def parallelize_data(X, eps, n_pa_each_dim):
+    # convert the data to list
+    X = X.tolist()
+    n_features = len(X[0])
+    n_partitions = np.prod(n_pa_each_dim)
+    
+    # construct the grid
+    min_max_bounds = get_minmax_by_data(X)
+    n_grid_each_dim = cal_grid_num(min_max_bounds, eps)
+    grid_bin_bounds = get_bin_bounds(min_max_bounds, n_grid_each_dim)
+
+    # locate the points
+    rdd = sc.parallelize(X, n_partitions)
+    grid_rdd = rdd.map(lambda x: (find_location_id(x, grid_bin_bounds, n_grid_each_dim), x))
+
+    # group the points inside each grid
+    grid_rdd = grid_rdd.groupByKey().mapValues(list)
+    
+    # divide the grid into partitions
+    grid_min_max = np.array(([0 for _ in range(len(n_grid_each_dim))], [i-1 for i in n_grid_each_dim])).T
+    grid_bins = get_bin_bounds(grid_min_max, n_pa_each_dim)
+
+    # buffer size (number of cells to be included in half of the buffer region)
+    buffer_size = int(np.ceil(eps/cal_grid_side_len(eps, n_features)))
+    
+    # partition the cells
+    partitioned_rdd = get_partitioned_cells(grid_rdd, grid_bins, n_pa_each_dim, buffer_size)
+    
+    return partitioned_rdd, n_grid_each_dim
