@@ -1,7 +1,3 @@
-from pyspark import SparkContext
-from pyspark import SparkConf
-sc = SparkContext.getOrCreate(SparkConf().setMaster("local[*]"))
-
 from utils import *
 from itertools import product
 import numpy as np
@@ -128,7 +124,7 @@ def get_partitioned_cells(rdd, grid_bins, n_pa_each_dim, buffer_size):
     return partitioned_rdd
 
 
-def parallelize_data(X, eps, n_pa_each_dim):
+def parallelize_data(X, eps, n_pa_each_dim, sc):
     # convert the data to list
     X = X.tolist()
     n_features = len(X[0])
@@ -141,7 +137,8 @@ def parallelize_data(X, eps, n_pa_each_dim):
 
     # locate the points
     rdd = sc.parallelize(X, n_partitions)
-    grid_rdd = rdd.map(lambda x: (find_location_id(x, grid_bin_bounds, n_grid_each_dim), x))
+    rdd = rdd.zipWithIndex().map(lambda x: (x[1], x[0]))
+    grid_rdd = rdd.map(lambda x: (find_location_id(x[1], grid_bin_bounds, n_grid_each_dim), (x[0], x[1])))
 
     # group the points inside each grid
     grid_rdd = grid_rdd.groupByKey().mapValues(list)

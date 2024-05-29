@@ -5,7 +5,6 @@ from graphframes import GraphFrame
 sc = SparkContext.getOrCreate(SparkConf().setMaster("local[*]"))
 spark = SparkSession.builder.appName("ApproxDBSCAN").getOrCreate()
 
-from partitioning import *
 from utils import *
 
 
@@ -21,10 +20,10 @@ def find_core_points(pa, eps, min_pts):
             for p in grid[1]:
                 points.append([pid, grid[0], p])
                 
-        for pid, gid, value in points:
+        for paid, gid, (pid,value) in points:
             count = 0
             core_flag = 0
-            for _, _, value2 in points:
+            for _, _, (_,value2) in points:
                 if value == value2:
                     continue
                 if np.linalg.norm(np.array(value) - np.array(value2)) <= eps:
@@ -32,7 +31,7 @@ def find_core_points(pa, eps, min_pts):
                     if count >= min_pts:
                         core_flag = 1
                         break
-            yield ((pid, gid), value, core_flag)
+            yield ((paid, gid), (pid, value), core_flag)
 
 def find_core_cells(pa):
     pa = list(pa)
@@ -63,8 +62,10 @@ def find_neighbor_cell(pa, eps):
     
     for pid, grids in partitions.items():
         for i, (gid, points) in enumerate(grids):
+            point_values = [p[1] for p in points]
             for gid2, points2 in grids[i+1:]:
-                distance_matrix = get_distance_matrix(points, points2)
+                point_values2 = [p[1] for p in points2]
+                distance_matrix = get_distance_matrix(point_values, point_values2)
                 isNeighbor = np.sum(distance_matrix <= eps)
                 if isNeighbor >= 1:
                     yield (pid, gid, gid2)
@@ -108,34 +109,32 @@ def merge_partitioned_data(points_with_flag, X, pos_to_gid):
         for k, v in points_flag.items():
             yield (gid, (k, v))
 
-    points_flagged = points_with_flag.map(lambda x: (pos_to_gid[x[0][1]], (get_point_index(X, x[1]), x[2])))
+    points_flagged = points_with_flag.map(lambda x: (pos_to_gid[x[0][1]], (x[1][0], x[2])))
     points_flagged = points_flagged.groupByKey().mapValues(list)
     points_flagged = points_flagged.flatMap(lambda x: _remove_duplicates(x))
     
     return points_flagged
 
-def approximate_DBSCAN(X, eps, min_pts, n_pa_each_dim):
-    # Step 1: Parallelize the data
-    partitioned_rdd, n_grid_each_dim = parallelize_data(X, eps, n_pa_each_dim)
-    
-    # Step 2: Compute the core points
+def ApproxDBSCAN(X, partitioned_rdd, eps, min_pts, n_grid_each_dim, n_pa_each_dim):
+
+    # Step 1: Compute the core points
     points_with_flag = partitioned_rdd.mapPartitions(lambda x: find_core_points(x, eps, min_pts))
     
-    # Step 3: Compute the core cells
+    # Step 2: Compute the core cells
     core_cells = points_with_flag.mapPartitions(lambda x: find_core_cells(x))
     
-    # Step 4: Find eps-neighbor cell pairs
+    # Step 3: Find eps-neighbor cell pairs
     neighbor_pairs = core_cells.mapPartitions(lambda x: find_neighbor_cell(x, eps))
     
-    # Step 5: Create graph and find connected components
+    # Step 4: Create graph and find connected components
     pos_to_gid, gid_to_pos = grid_index_mapping(n_grid_each_dim)
     pos_to_paid, paid_to_pos = grid_index_mapping(n_pa_each_dim)
     connectedComponent = compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim)
     
-    # Step 6: Merge partitioned data
+    # Step 5: Merge partitioned data
     points_flagged = merge_partitioned_data(points_with_flag, X, pos_to_gid)
     
-    # Step 7: Assign points to clusters
+    # Step 6: Assign points to clusters
     cluster = connectedComponent.map(lambda x: (x[1], x[2]))\
                                 .join(points_flagged)\
                                 .map(lambda x: (x[1][0], x[1][1][0], x[1][1][1]))
