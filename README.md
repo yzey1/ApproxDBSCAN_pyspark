@@ -7,6 +7,7 @@ To understand the detailed implementation:
 
 To view use cases for the algorithm
 - refer to `main.ipynb`
+- e.g., ![clustering_result_on_random_testset](https://github.com/Yzey1/ApproxDBSCAN_pyspark/blob/main/figs/IRIS_ApproxDBSCAN.pdf)
 
 `partitioning.py` : Space partitioning operations. Used to create grids and to create partitioned spaces for parallel computing partitions.
 
