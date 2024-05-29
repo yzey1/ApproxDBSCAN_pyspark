@@ -1,5 +1,7 @@
 import numpy as np
 from itertools import product
+import random
+
 
 def cal_grid_side_len(eps, n_features):
     return eps/np.sqrt(n_features)
@@ -47,3 +49,7 @@ def reindex_id(input_col):
     new_ind = [i for i in range(len(old_ind))]
     new_ind = dict(zip(old_ind, new_ind))
     return input_col.map(new_ind)
+
+def generate_random_binary():
+    binary = random.randint(0, 1)
+    return binary

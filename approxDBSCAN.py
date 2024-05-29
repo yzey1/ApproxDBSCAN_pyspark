@@ -44,7 +44,7 @@ def get_distance_matrix(points1, points2):
             distance_matrix[i][j] = np.linalg.norm(np.array(points1[i]) - np.array(points2[j]))
     return distance_matrix
 
-def find_neighbor_cell(pa, eps):
+def find_neighbor_cell(pa, eps, rho):
     pa = list(pa)
     partitions = {}
     
@@ -62,6 +62,11 @@ def find_neighbor_cell(pa, eps):
                 isNeighbor = np.sum(distance_matrix <= eps)
                 if isNeighbor >= 1:
                     yield (pid, gid, gid2)
+                else:
+                    isApproxNeighbor = np.sum(distance_matrix <= eps*(1+rho))
+                    if isApproxNeighbor >= 1:
+                        if generate_random_binary():
+                            yield (pid, gid, gid2)
 
 def compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim, sc):
     
@@ -108,7 +113,7 @@ def merge_partitioned_data(points_with_flag, pos_to_gid):
     
     return points_flagged
 
-def ApproxDBSCAN(partitioned_rdd, eps, min_pts, n_grid_each_dim, n_pa_each_dim, sc):
+def ApproxDBSCAN(partitioned_rdd, eps, min_pts, rho, n_grid_each_dim, n_pa_each_dim, sc):
 
     # Step 1: Compute the core points
     points_with_flag = partitioned_rdd.mapPartitions(lambda x: find_core_points(x, eps, min_pts))
@@ -117,11 +122,11 @@ def ApproxDBSCAN(partitioned_rdd, eps, min_pts, n_grid_each_dim, n_pa_each_dim, 
     core_cells = points_with_flag.mapPartitions(lambda x: find_core_cells(x))
     
     # Step 3: Find eps-neighbor cell pairs
-    neighbor_pairs = core_cells.mapPartitions(lambda x: find_neighbor_cell(x, eps))
+    neighbor_pairs = core_cells.mapPartitions(lambda x: find_neighbor_cell(x, eps, rho))
     
     # Step 4: Create graph and find connected components
-    pos_to_gid, gid_to_pos = grid_index_mapping(n_grid_each_dim)
-    pos_to_paid, paid_to_pos = grid_index_mapping(n_pa_each_dim)
+    pos_to_gid, _ = grid_index_mapping(n_grid_each_dim)
+    pos_to_paid, _ = grid_index_mapping(n_pa_each_dim)
     connectedComponent = compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim, sc)
     
     # Step 5: Merge partitioned data
