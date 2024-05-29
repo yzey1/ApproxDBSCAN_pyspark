@@ -1,12 +1,5 @@
-from pyspark import SparkContext
-from pyspark import SparkConf
-from pyspark.sql import SparkSession
-from graphframes import GraphFrame
-sc = SparkContext.getOrCreate(SparkConf().setMaster("local[*]"))
-spark = SparkSession.builder.appName("ApproxDBSCAN").getOrCreate()
-
 from utils import *
-
+from graphframes import GraphFrame
 
 # find core points in each partition
 def find_core_points(pa, eps, min_pts):
@@ -70,7 +63,7 @@ def find_neighbor_cell(pa, eps):
                 if isNeighbor >= 1:
                     yield (pid, gid, gid2)
 
-def compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim):
+def compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim, sc):
     
     # create vertices and edges
     v = core_cells.map(lambda x: (pos_to_paid[x[0][0]], pos_to_gid[x[0][1]],)).toDF(["paid", "id"])
@@ -94,7 +87,7 @@ def compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_
     
     return connectedComponent.rdd
 
-def merge_partitioned_data(points_with_flag, X, pos_to_gid):
+def merge_partitioned_data(points_with_flag, pos_to_gid):
     
     def _remove_duplicates(x):
         gid = x[0]
@@ -115,7 +108,7 @@ def merge_partitioned_data(points_with_flag, X, pos_to_gid):
     
     return points_flagged
 
-def ApproxDBSCAN(X, partitioned_rdd, eps, min_pts, n_grid_each_dim, n_pa_each_dim):
+def ApproxDBSCAN(partitioned_rdd, eps, min_pts, n_grid_each_dim, n_pa_each_dim, sc):
 
     # Step 1: Compute the core points
     points_with_flag = partitioned_rdd.mapPartitions(lambda x: find_core_points(x, eps, min_pts))
@@ -129,10 +122,10 @@ def ApproxDBSCAN(X, partitioned_rdd, eps, min_pts, n_grid_each_dim, n_pa_each_di
     # Step 4: Create graph and find connected components
     pos_to_gid, gid_to_pos = grid_index_mapping(n_grid_each_dim)
     pos_to_paid, paid_to_pos = grid_index_mapping(n_pa_each_dim)
-    connectedComponent = compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim)
+    connectedComponent = compute_connected_components(core_cells, neighbor_pairs, pos_to_gid, pos_to_paid, n_pa_each_dim, sc)
     
     # Step 5: Merge partitioned data
-    points_flagged = merge_partitioned_data(points_with_flag, X, pos_to_gid)
+    points_flagged = merge_partitioned_data(points_with_flag, pos_to_gid)
     
     # Step 6: Assign points to clusters
     cluster = connectedComponent.map(lambda x: (x[1], x[2]))\

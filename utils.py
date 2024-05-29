@@ -40,3 +40,10 @@ def grid_index_mapping(n_grid_each_dim):
 
 def get_point_index(data, value):
     return data.index(value)
+
+def reindex_id(input_col):
+    old_ind = input_col.unique()
+    # old_ind = [i for i in old_ind if i != -1]
+    new_ind = [i for i in range(len(old_ind))]
+    new_ind = dict(zip(old_ind, new_ind))
+    return input_col.map(new_ind)

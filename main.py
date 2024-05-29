@@ -1,3 +1,10 @@
+from pyspark import SparkContext
+from pyspark import SparkConf
+from pyspark.sql import SparkSession
+from graphframes import GraphFrame
+sc = SparkContext.getOrCreate(SparkConf().setMaster("local[*]"))
+spark = SparkSession.builder.appName("ApproxDBSCAN").getOrCreate()
+
 from sklearn import datasets
 from partitioning import parallelize_data
 from approxDBSCAN import ApproxDBSCAN
